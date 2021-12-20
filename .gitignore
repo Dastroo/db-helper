@@ -52,3 +52,5 @@ _deps
 #project specyfic
 test
 *build*
+build.sh
+main.cpp

@@ -15,25 +15,13 @@
 #include "Utils.h"
 
 class DBHelper {
-
     SQLite::Database *database = nullptr;
+
     std::string db_name;
     std::string db_dir_path;
     std::string db_full_path;
 
 public:
-    explicit DBHelper(const std::string &db_name = "data_base") {
-        set_db_name(db_name);
-        set_db_dir_path(db_dir_path);
-        set_db_full_path(db_full_path);
-        set_db_dir();
-        database = new SQLite::Database(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-    };
-
-    ~DBHelper() {
-        delete database;
-    };
-
     enum type {
         INTEGER,
         TEXT,
@@ -42,21 +30,42 @@ public:
         AUTO_INCREMENT,
     };
 
+    explicit DBHelper(const std::string &db_name = "data_base",
+                      const int &permissions = SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE) {
+        set_db_name(db_name);
+        set_db_dir_path(db_dir_path);
+        set_db_full_path(db_full_path);
+        set_db_dir();
+
+        try {
+            database = new SQLite::Database(db_full_path, permissions);
+        } catch (std::exception &e) {
+            std::cerr << "DBHelper::DBHelper -> " << e.what() << std::endl;
+        }
+    };
+
+    ~DBHelper() {
+        delete database;
+    };
+
     /**
      * use for more complicated queries that can't/are hard to be made generic
      * TODO: not working currently.. maybe..
      * @param sql
-     * @return
+     * @return the query as SQLite::Statement
      */
-    SQLite::Statement execute(const std::string &sql) {
+    std::shared_ptr<SQLite::Statement> execute(const std::string &sql) {
+        if (!database) {
+            std::cerr << "DBHelper::execute -> " << "database is nullptr" << std::endl;
+            return {};
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-            SQLite::Statement query(db, sql);
+            std::shared_ptr<SQLite::Statement> query = std::make_shared<SQLite::Statement>(*database, sql);
             return query;
         } catch (std::exception &e) {
             std::cerr << "DBHelper::execute -> " << e.what() << std::endl;
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-            return {db, ""};
+            return {};
         }
     }
 
@@ -72,8 +81,12 @@ public:
      */
     template<typename ...Args>
     void create(const std::string &table_name, Args &&...args) {
+        if (!database) {
+            std::cerr << "DBHelper::create -> " << "database is nullptr" << std::endl;
+            return;
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
             std::string sql = "CREATE TABLE " + table_name + " (";
 
             std::string body;
@@ -81,7 +94,7 @@ public:
             body.erase(0, 2);
 
             sql += body += ')';
-            SQLite::Statement query(db, sql);
+            SQLite::Statement query(*database, sql);
             query.exec();
         } catch (std::exception &e) {
             std::cerr << "DBHelper::create -> " << e.what() << std::endl;
@@ -94,9 +107,13 @@ public:
      * @param table_name name of table you want to delete
      */
     void drop(const std::string &table_name) {
+        if (!database) {
+            std::cerr << "DBHelper::drop -> " << "database is nullptr" << std::endl;
+            return;
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-            db.exec("DROP TABLE IF EXISTS " + table_name);
+            database->exec("DROP TABLE IF EXISTS " + table_name);
         } catch (std::exception &e) {
             std::cerr << "DBHelper::drop -> " << e.what() << std::endl;
         }
@@ -105,16 +122,20 @@ public:
     /// INSERT INTO @table_name (@columns...) VALUES (@value...)
     template<typename ...C, typename ...V>
     void insert(const std::string &table_name, C &&...columns, V &&...values) {
+        if (!database) {
+            std::cerr << "DBHelper::insert -> " << "database is nullptr" << std::endl;
+            return;
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-            SQLite::Statement query(db, ult::concatenate("INSERT INTO ",
-                                                         table_name,
-                                                         " (",
-                                                         ult::intersect(columns...),
-                                                         ") VALUES (",
-                                                         ult::intersect(as_questionmark(values)...),
-                                                         ")"
-            ));
+            SQLite::Statement query(*database, ult::concatenate(
+                    "INSERT INTO ",
+                    table_name,
+                    " (",
+                    ult::intersect(columns...),
+                    ") VALUES (",
+                    ult::intersect(as_questionmark(values)...),
+                    ")"));
             SQLite::bind(query, std::forward<V>(values)...);
             query.exec();
         } catch (std::exception &e) {
@@ -129,10 +150,17 @@ public:
     template<typename T>
     void
     remove(const std::string &table_name, const std::string &column, const std::string &condition, const T &value) {
+        if (!database) {
+            std::cerr << "DBHelper::remove -> " << "database is nullptr" << std::endl;
+            return;
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-            SQLite::Statement query(db,
-                                    ult::concatenate("DELETE FROM ", table_name, " WHERE ", column, condition, "?"));
+            SQLite::Statement query(*database, ult::concatenate(
+                    "DELETE FROM ",
+                    table_name,
+                    " WHERE ",
+                    column, condition, "?"));
             SQLite::bind(query, value);
             query.exec();
         } catch (std::exception &e) {
@@ -140,15 +168,47 @@ public:
         }
     }
 
+    /// SELECT @columns FROM @table_name WHERE @condition_column @condition @condition_value
+    template<typename ...Args, typename T>
+    std::shared_ptr<SQLite::Statement>
+    get(const std::string &table_name, const std::string &condition_column, const std::string &condition,
+        const T &condition_value, Args &&...columns) {
+        if (!database) {
+            std::cerr << "DBHelper::get -> " << "database is nullptr" << std::endl;
+            return {};
+        }
+
+        try {
+            std::shared_ptr<SQLite::Statement> query =
+                    std::make_shared<SQLite::Statement>(*database, ult::concatenate(
+                            "SELECT ", ult::intersect(columns...),
+                            " FROM ", table_name,
+                            " WHERE ",
+                            condition_column, condition, "?"));
+            SQLite::bind(*query, condition_value);
+
+            return query;
+        } catch (std::exception &e) {
+            std::cerr << "DBHelper::get -> " << e.what() << std::endl;
+            return {};
+        }
+    }
+
     /// UPDATE @table_name SET @column='@value' WHERE @condition_column='@condition_value'
     template<typename T1, typename T2>
     void update(const std::string &table_name, const std::string &column, const T1 &value,
                 const std::string &condition_column, const T2 &condition_value) {
+        if (!database) {
+            std::cerr << "DBHelper::update -> " << "database is nullptr" << std::endl;
+            return;
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-            SQLite::Statement query(db,
-                                    ult::concatenate("UPDATE ", table_name, " SET ", column, "=? WHERE ",
-                                                     condition_column, "=?"));
+            SQLite::Statement query(*database, ult::concatenate(
+                    "UPDATE ", table_name,
+                    " SET ", column,
+                    "=? WHERE ",
+                    condition_column, "=?"));
             SQLite::bind(query, value, condition_value);
             query.exec();
         } catch (std::exception &e) {
@@ -161,11 +221,17 @@ public:
     template<typename T1, typename T2>
     void update(const std::string &table_name, const std::string &column, const T1 &value,
                 const std::string &condition_column, const std::string &condition, const T2 &condition_value) {
+        if (!database) {
+            std::cerr << "DBHelper::update -> " << "database is nullptr" << std::endl;
+            return;
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-            SQLite::Statement query(db,
-                                    ult::concatenate("UPDATE ", table_name, " SET ", column, "=? WHERE ",
-                                                     condition_column, condition, "?"));
+            SQLite::Statement query(*database, ult::concatenate(
+                    "UPDATE ", table_name,
+                    " SET ", column,
+                    "=? WHERE ",
+                    condition_column, condition, "?"));
             SQLite::bind(query, value, condition_value);
             query.exec();
         } catch (std::exception &e) {
@@ -173,28 +239,14 @@ public:
         }
     }
 
-    /// SELECT @columns FROM @table_name WHERE @condition_column @condition @condition_value
-    template<typename ...Args, typename T>
-    SQLite::Statement* get(const std::string &table_name, const std::string &condition_column, const std::string &condition,
-             const T &condition_value, Args &&...columns) {
-        try {
-//            SQLite::Database db(db_full_path, SQLite::OPEN_READONLY);
-            auto *query = new SQLite::Statement(*database, ult::concatenate("SELECT ", ult::intersect(columns...), " FROM ", table_name,
-                                                         " WHERE ",
-                                                         condition_column,
-                                                         condition,
-                                                         "?"));
-            SQLite::bind(*query, condition_value);
-            return query;
-        } catch (std::exception &e) {
-            std::cerr << "DBHelper::get -> " << e.what() << std::endl;
-        }
-    }
-
     bool table_exists(const std::string &table_name) {
+        if (!database) {
+            std::cerr << "DBHelper::execute -> " << "database is nullptr" << std::endl;
+            return {};
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READONLY);
-            return db.tableExists(table_name);
+            return database->tableExists(table_name);
         } catch (std::exception &e) {
             std::cerr << "DBHelper::table_exists -> " << e.what() << std::endl;
             return false;
@@ -202,9 +254,13 @@ public:
     }
 
     void write_to_cli(const std::string &table_name) {
+        if (!database) {
+            std::cerr << "DBHelper::execute -> " << "database is nullptr" << std::endl;
+            return;
+        }
+
         try {
-            SQLite::Database db(db_full_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-            SQLite::Statement query(db, "SELECT * FROM " + table_name);
+            SQLite::Statement query(*database, "SELECT * FROM " + table_name);
             while (query.executeStep()) {
                 for (int i = 0; i < query.getColumnCount(); ++i)
                     std::cout << query.getColumn(i) << "\t";
@@ -215,6 +271,7 @@ public:
         }
     }
 
+private:
     void set_db_name(const std::string &name) {
         this->db_name = name;
     }

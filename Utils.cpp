@@ -7,7 +7,7 @@
 
 std::string ult::get_executable_name() {
 #if __linux__
-    return program_invocation_name;
+    return program_invocation_short_name;
 #endif
 #if _WIN32
     //  TODO: WINDOWS SUPPORT

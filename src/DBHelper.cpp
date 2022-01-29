@@ -3,6 +3,7 @@
 //
 
 #include <unistd.h>
+#include <filesystem>
 
 #include "../include/DBHelper.h"
 
@@ -15,7 +16,7 @@ DBHelper::DBHelper(const std::string &db_name,
 
     try {
         database = new SQLite::Database(db_full_path, permissions);
-    } catch (std::exception &e) {
+    } catch (SQLite::Exception &e) {
         std::cerr << "DBHelper::DBHelper -> " << e.what() << std::endl;
     }
 };
@@ -24,7 +25,7 @@ DBHelper::~DBHelper() {
     delete database;
 };
 
-[[maybe_unused]] std::shared_ptr<SQLite::Statement> DBHelper::execute(const std::string &sql) {
+[[maybe_unused]] [[maybe_unused]] std::shared_ptr<SQLite::Statement> DBHelper::execute(const std::string &sql) {
     if (!database) {
         std::cerr << "DBHelper::execute -> " << "database is nullptr" << std::endl;
         return {};
@@ -33,7 +34,7 @@ DBHelper::~DBHelper() {
     try {
         std::shared_ptr<SQLite::Statement> query = std::make_shared<SQLite::Statement>(*database, sql);
         return query;
-    } catch (std::exception &e) {
+    } catch (SQLite::Exception &e) {
         std::cerr << "DBHelper::execute -> " << e.what() << std::endl;
         return {};
     }
@@ -47,7 +48,7 @@ bool DBHelper::table_exists(const std::string &table_name) {
 
     try {
         return database->tableExists(table_name);
-    } catch (std::exception &e) {
+    } catch (SQLite::Exception &e) {
         std::cerr << "DBHelper::table_exists -> " << e.what() << std::endl;
         return false;
     }
@@ -61,7 +62,7 @@ void DBHelper::drop(const std::string &table_name) {
 
     try {
         database->exec("DROP TABLE IF EXISTS " + table_name);
-    } catch (std::exception &e) {
+    } catch (SQLite::Exception &e) {
         std::cerr << "DBHelper::drop -> " << e.what() << std::endl;
     }
 }
@@ -79,7 +80,7 @@ void DBHelper::write_to_cli(const std::string &table_name) {
                 std::cout << query.getColumnName(i) << ": " << query.getColumn(i) << "\t";
             std::cout << std::endl;
         }
-    } catch (std::exception &e) {
+    } catch (SQLite::Exception &e) {
         std::cerr << "DBHelper::write_to_console -> " << e.what() << std::endl;
     }
 }
@@ -120,9 +121,7 @@ void DBHelper::set_db_dir() {
         return;
     }
 
-    if (mkdir(db_dir_path.c_str(), 0777) == -1)
-        if (errno != 17)    //  suppress "File exist error"
-            std::cerr << "DBHelper::set_db_dir -> " << strerror(errno) << std::endl;
+    std::filesystem::create_directories(db_dir_path.c_str());
 }
 
 /**
@@ -145,7 +144,7 @@ std::string DBHelper::assign_value(type t) {
         case AUTO_INCREMENT:
             return " AUTOINCREMENT";
         default:
-            throw std::exception();
+            throw SQLite::Exception("tried to use nonexistent enum type");
     }
 }
 

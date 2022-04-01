@@ -53,4 +53,3 @@ _deps
 test
 *build*
 build.sh
-main.cpp

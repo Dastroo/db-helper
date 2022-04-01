@@ -4,16 +4,7 @@
 
 #pragma once
 
-#include <iostream>
-#include <vector>
-#include <sys/stat.h>
-
-#include <SQLiteCpp/SQLiteCpp.h>
-#include <SQLiteCpp/VariadicBind.h>
-
-#include "TypeRange.h"
-
-
+/// TODO: divide template functions into a separate .inl file
 class DBHelper {
     SQLite::Database *database = nullptr;
 
@@ -30,12 +21,13 @@ public:
         AUTO_INCREMENT,
     };
 
+    [[maybe_unused]]
     explicit DBHelper(const std::string &db_name = "data_base",
                       const int &permissions = SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE | SQLite::OPEN_NOMUTEX);
 
     ~DBHelper();
 
-    SQLite::Database& db() {
+    SQLite::Database &db() {
         return *database;
     }
 
@@ -60,6 +52,8 @@ public:
     [[maybe_unused]] std::shared_ptr<SQLite::Statement> execute(const std::string &sql);
 
     bool table_exists(const std::string &table_name);
+
+    bool table_empty(const std::string &table_name);
 
     template<typename T>
     bool exists(const std::string &table_name, const std::string &column, T value) {
@@ -212,14 +206,19 @@ public:
      *  int id = query->getColumn("id").getInt();
      *  char* val = query->getColumn("value").getString();
      * @endcode
+     *
+     * @warning
+     * may produce "database locked" error
+     * make sure to only return this function to variable in local space like a function/method\n
      * TODO: better documentation
      */
     template<typename T>
     [[maybe_unused]] std::shared_ptr<SQLite::Statement>
-    inline get(const std::string &table_name,  const std::string &condition_column,
+    inline get(const std::string &table_name, const std::string &condition_column,
                const T &condition_value) {
         if (!database) {
             std::cerr << "DBHelper::get -> " << "database is nullptr" << std::endl;
+            return {};
         }
 
         try {
@@ -230,10 +229,12 @@ public:
 
             std::shared_ptr<SQLite::Statement> query =
                     std::make_shared<SQLite::Statement>(*database, sql);
-            SQLite::bind(query, condition_value);
+            SQLite::bind(*query, condition_value);
+            query->executeStep();
             return query;
         } catch (SQLite::Exception &e) {
             std::cerr << "DBHelper::get -> " << e.what() << std::endl;
+            return {};
         }
     }
 
@@ -393,24 +394,30 @@ public:
     }
 
     /**
-     *  @sqlite UPDATE <b>table_name</b> SET <b>column</b>='<b>value</b>' WHERE <b>condition_column</b>='<b>condition_value</b>'
-     *  TODO: better documentation
-     */
-    template<typename T1, typename T2>
-    inline void update(const std::string &table_name, const std::string &column, const T1 &value,
-                       const std::string &condition_column, const T2 &condition_value) {
+    *  @sqlite UPDATE <b>table_name</b> SET (args...=args...)... WHERE <b>condition_column</b>='<b>condition_value</b>'
+    *  TODO: better documentation
+    */
+    template<typename T, typename ...Args>
+    inline void update(const std::string &table_name, const std::string &condition_column, const T &condition_value,
+                       Args ...args) {
         if (!database) {
             std::cerr << "DBHelper::update -> " << "database is nullptr" << std::endl;
             return;
         }
 
         try {
-            SQLite::Statement query(*database, concatenate(
+            constexpr size_t n = sizeof...(args);
+            typename integer_range_generate<std::size_t, 0, n - 2, 2>::type columns;
+            typename integer_range_generate<std::size_t, 1, n - 1, 2>::type values;
+
+            std::string sql = concatenate(
                     "UPDATE ", table_name,
-                    " SET ", column,
-                    "=? WHERE ",
-                    condition_column, "=?"));
-            SQLite::bind(query, value, condition_value);
+                    " SET ",
+                    write_col_name_eq_question_mark(columns, std::forward_as_tuple(std::forward<Args>(args)...)),
+                    " WHERE ", condition_column, "=?");
+            SQLite::Statement query(*database, sql);
+            bind(query, values, std::forward_as_tuple(std::forward<Args>(args)...));
+            query.bind((n / 2) + 1, condition_value);
             query.exec();
         } catch (SQLite::Exception &e) {
             std::cerr << "DBHelper::update -> " << e.what() << std::endl;
@@ -418,24 +425,35 @@ public:
     }
 
     /**
-     *  @sqlite UPDATE <b>table_name</b> SET <b>column</b>='<b>value</b>' WHERE <b>condition_column</b> <b>condition</b> '<b>condition_value</b>'
-     *  TODO: better documentation
-     */
-    template<typename T1, typename T2>
-    inline void update(const std::string &table_name, const std::string &column, const T1 &value,
-                       const std::string &condition_column, const std::string &condition, const T2 &condition_value) {
+    *  @sqlite UPDATE <b>table_name</b> SET (args...=args...)... WHERE <b>condition_column</b>='<b>condition_value</b>'
+    *  TODO: better documentation
+    */
+    template<typename T, typename ...Args>
+    inline void
+    update(const std::string &table_name, std::vector<std::tuple<std::string, std::string, T>> conditions,
+           Args ...args) {
         if (!database) {
             std::cerr << "DBHelper::update -> " << "database is nullptr" << std::endl;
             return;
         }
 
         try {
-            SQLite::Statement query(*database, concatenate(
+            constexpr size_t n = sizeof...(args);
+            typename integer_range_generate<std::size_t, 0, n - 2, 2>::type columns;
+            typename integer_range_generate<std::size_t, 1, n - 1, 2>::type values;
+
+            std::string sql = concatenate(
                     "UPDATE ", table_name,
-                    " SET ", column,
-                    "=? WHERE ",
-                    condition_column, condition, "?"));
-            SQLite::bind(query, value, condition_value);
+                    " SET ",
+                    write_col_name_eq_question_mark(columns, std::forward_as_tuple(std::forward<Args>(args)...)),
+                    " WHERE ", form_conditions(conditions));
+            std::cout << sql << std::endl;
+            SQLite::Statement query(*database, sql);
+            bind(query, values, std::forward_as_tuple(std::forward<Args>(args)...));
+            int q = n-1;
+            for (int i = 0; i < conditions.size(); ++i)
+                query.bind(q++, std::get<2>(conditions.at(i)));
+
             query.exec();
         } catch (SQLite::Exception &e) {
             std::cerr << "DBHelper::update -> " << e.what() << std::endl;
@@ -542,6 +560,75 @@ private:    //  utility functions
             (query.bind(n++, std::get<indexes>(args)), ...);
         } catch (SQLite::Exception &e) {
             std::cerr << "DBHelper::bind -> " << e.what() << std::endl;
+        }
+    }
+
+    std::string col_name_eq_question_mark(std::string const &str) {
+        std::ostringstream oss;
+        oss << ", " << str << "=?";
+        return oss.str();
+    }
+
+    std::string col_name_eq_question_mark(int const &str) {
+        std::ostringstream oss;
+        oss << ", " << str << "=?";
+        return oss.str();
+    }
+
+    // debugging aid
+    template<size_t... i, typename Args>
+    void print_sequence2(integer_pack<size_t, i...>, Args &&args) {
+        ((std::cout << std::get<i>(args) << ' '), ...);
+        std::cout << '\n';
+    }
+
+    // debugging aid
+    template<size_t... ints>
+    void print_sequence(integer_pack<size_t, ints...>) {
+        ((std::cout << ints << ' '), ...);
+        std::cout << '\n';
+    }
+
+    // debugging aid
+    template<size_t i, typename Args>
+    void print_arg(Args &&args) {
+        std::ostringstream oss;
+        oss << std::get<i>(args) << '\n';
+        std::cout << oss.str();
+    }
+
+    template<typename T>
+    std::string form_conditions(std::vector<std::tuple<std::string, std::string, T>> &conditions) {
+        if (conditions.empty())
+            return {};
+
+        std::ostringstream oss;
+        oss << std::get<0>(conditions.at(0)) << std::get<1>(conditions.at(0)) << '?';
+        if (conditions.size() == 1)
+            return oss.str();
+
+        for (int i = 1; i < conditions.size(); ++i) {
+            oss << " AND " << std::get<0>(conditions.at(i)) << std::get<1>(conditions.at(i)) << '?';
+        }
+        return oss.str();
+    }
+
+    std::string get_str(std::string &&arg) {
+        return arg;
+    }
+
+    template<typename Args, size_t... indexes>
+    std::string write_col_name_eq_question_mark(integer_pack<size_t, indexes...>, Args &&args) {
+        try {
+            std::ostringstream oss;
+            ((oss << std::get<indexes>(args) << "=?, "), ...);
+            std::string result = oss.str();
+            result.pop_back();
+            result.pop_back();
+            return result;
+        } catch (SQLite::Exception &e) {
+            std::cerr << "DBHelper::write_col_name_eq_question_mark -> " << e.what() << std::endl;
+            return {};
         }
     }
 };

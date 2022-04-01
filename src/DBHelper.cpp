@@ -2,11 +2,19 @@
 // Created by dawid on 22.12.2021.
 //
 
+#include <iostream>
+#include <vector>
+
+#include <SQLiteCpp/SQLiteCpp.h>
+#include <SQLiteCpp/VariadicBind.h>
+#include <unordered_map>
+
 #include <unistd.h>
 #include <filesystem>
-
+#include "../include/TypeRange.h"
 #include "../include/DBHelper.h"
 
+[[maybe_unused]]
 DBHelper::DBHelper(const std::string &db_name,
                    const int &permissions) {
     set_db_name(db_name);
@@ -17,7 +25,7 @@ DBHelper::DBHelper(const std::string &db_name,
     try {
         database = new SQLite::Database(db_full_path, permissions);
     } catch (SQLite::Exception &e) {
-        std::cerr << "DBHelper::DBHelper -> " << e.what() << std::endl;
+        std::cerr << "DBHelper::DBHelper -> failed to open database: " << e.what() << std::endl;
     }
 };
 
@@ -187,4 +195,11 @@ std::string DBHelper::to_lower(const std::string &str) {
     for (auto c: str)
         result += (char) std::tolower(c);
     return result;
+}
+
+bool DBHelper::table_empty(const std::string &table_name) {
+    int count = database->execAndGet(concatenate(
+            "SELECT COUNT(*) FROM ", table_name)).getInt();
+
+    return count == 0;
 }

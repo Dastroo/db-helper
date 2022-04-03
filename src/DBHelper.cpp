@@ -4,15 +4,12 @@
 
 #include <iostream>
 #include <vector>
-
-#include <SQLiteCpp/SQLiteCpp.h>
-#include <SQLiteCpp/VariadicBind.h>
 #include <unordered_map>
-
 #include <unistd.h>
 #include <filesystem>
-#include "../include/TypeRange.h"
+
 #include "../include/DBHelper.h"
+
 
 [[maybe_unused]]
 DBHelper::DBHelper(const std::string &db_name,

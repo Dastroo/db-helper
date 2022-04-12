@@ -3,8 +3,11 @@ project(db-helper)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_library(${PROJECT_NAME} include/DBHelper.h src/DBHelper.cpp include/TypeRange.h include/DBHelper.inl)
-target_link_libraries(${PROJECT_NAME} SQLiteCpp sqlite3)
+enable_testing()
+add_subdirectory(unit_tests)
+
+add_library(${PROJECT_NAME} include/DBHelper.h include/DBHelper.inl src/DBHelper.cpp)
+target_link_libraries(${PROJECT_NAME} SQLiteCpp sqlite3 my_utils)
 
 #   INSTALL
 if (UNIX AND NOT APPLE)

@@ -12,7 +12,7 @@
 
 
 DBHelper::DBHelper() {
-    this->db_full_path = get_default_dir_path("database.db3");
+    this->db_full_path = default_path.empty() ? get_default_dir_path("database.db3") : default_path;
     set_db_dir_path(db_full_path);
     set_db_name(db_full_path);
     create_db_dir();

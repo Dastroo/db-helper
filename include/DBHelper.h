@@ -80,6 +80,8 @@ public:
 
     inline std::string get_db_full_path() { return db_full_path; }
 
+    inline static void set_default_path(const std::string &path) { default_path = path; }
+
     /**
      * use for more complicated queries that can't/are hard to be made generic
      * TODO: not working currently.. maybe..

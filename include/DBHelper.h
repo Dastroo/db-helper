@@ -68,7 +68,7 @@ public:
      * TODO: write documentation
      */
     DBHelper(const std::string &db_path,
-                      const int &permissions);
+             const int &permissions);
 
     ~DBHelper();
 
@@ -86,7 +86,6 @@ public:
      * @param sql
      * @return the query as SQLite::Statement
      */
-    [[maybe_unused]]
     std::shared_ptr<SQLite::Statement> execute(const std::string &sql);
 
     bool table_exists(const std::string &table_name);
@@ -379,10 +378,13 @@ public:
     update(const std::string &table_name, std::vector<std::tuple<std::string, std::string, T>> conditions,
            Args ...args);
 
+//======================================================================================================================
+
     /// writes whole table to command line interface
     void write_to_cli(const std::string &table_name);
 
 private:
+
     static std::string intersected_questionmarks(int num);
 
     std::string get_default_dir_path(const std::string &db_name);

@@ -439,10 +439,48 @@ TEST_CASE("get") {
     }
 }
 
+TEST_CASE(R"(table_exists(const std::string &table_name))") {
+    DBHelper db_helper;
+
+    CHECK_EQ(db_helper.table_exists("test"), true);
+    CHECK_EQ(db_helper.table_exists("test2"), true);
+    CHECK_EQ(db_helper.table_exists("test3"), true);
+    CHECK_EQ(db_helper.table_exists("test4"), false);
+
+}
+
+TEST_CASE(R"(table_empty(const std::string &table_name))") {
+    DBHelper db_helper;
+
+    CHECK_EQ(db_helper.table_empty("test3"), true);
+    CHECK_EQ(db_helper.table_empty("test"), false);
+}
+
 TEST_CASE("delete") {
     DBHelper db_helper;
     SUBCASE(R"(dele(const std::string &table_name, const std::tuple<Col, Op, Val> &condition))") {
+        CHECK_EQ(db_helper.dele("test", std::make_tuple("id", "=", 1)), "DELETE FROM test WHERE id=?");
+        CHECK_EQ(db_helper.exists("test", "id", 1), false);
+    }
 
+    SUBCASE(R"(dele(const std::string &table_name, const std::string &column, const std::string &op, const T &value))") {
+        CHECK_EQ(db_helper.dele("test", "id", "=", 2), "DELETE FROM test WHERE id=?");
+        CHECK_EQ(db_helper.exists("test", "id", 2), false);
+    }
+
+    SUBCASE(R"(dele(const std::string &table_name, const std::string &column, const T &value))") {
+        CHECK_EQ(db_helper.dele("test", "id", 3), "DELETE FROM test WHERE id=?");
+        CHECK_EQ(db_helper.exists("test", "id", 3), false);
+    }
+
+    SUBCASE(R"(dele(const std::string &table_name, std::vector<std::tuple<Col, Op, Val>> &conditions))") {
+        std::vector<std::tuple<std::string, std::string, int>> conditions;
+        conditions.emplace_back(std::tuple{"id", ">", 3});
+        conditions.emplace_back(std::tuple{"id", "<", 6});
+
+        CHECK_EQ(db_helper.dele("test", conditions), "DELETE FROM test WHERE id>? AND id<?");
+        CHECK_EQ(db_helper.exists("test", "id", 4), false);
+        CHECK_EQ(db_helper.exists("test", "id", 5), false);
     }
 }
 

@@ -94,6 +94,15 @@ void DBHelper::create_db_dir() {
     std::filesystem::create_directories(db_dir_path.c_str());
 }
 
+bool DBHelper::table_exists(const std::string &table_name) {
+    try {
+        return database->tableExists(table_name);
+    } catch (SQLite::Exception &e) {
+        std::cerr << "DBHelper::table_exists -> " << e.what() << std::endl;
+        return false;
+    }
+}
+
 std::shared_ptr<SQLite::Statement>
 DBHelper::select(const std::string &table_name) {
     try {
@@ -155,11 +164,6 @@ DBHelper::select(const std::string &table_name,
 }
 
 std::shared_ptr<SQLite::Statement> DBHelper::execute(const std::string &sql) {
-    if (!database) {
-        std::cerr << "DBHelper::execute -> " << "database is nullptr" << std::endl;
-        return {};
-    }
-
     try {
         std::shared_ptr<SQLite::Statement> query = std::make_shared<SQLite::Statement>(*database, sql);
         return query;
@@ -169,26 +173,7 @@ std::shared_ptr<SQLite::Statement> DBHelper::execute(const std::string &sql) {
     }
 }
 
-bool DBHelper::table_exists(const std::string &table_name) {
-    if (!database) {
-        std::cerr << "DBHelper::table_exists -> " << "database is nullptr" << std::endl;
-        return {};
-    }
-
-    try {
-        return database->tableExists(table_name);
-    } catch (SQLite::Exception &e) {
-        std::cerr << "DBHelper::table_exists -> " << e.what() << std::endl;
-        return false;
-    }
-}
-
 std::string DBHelper::drop(const std::string &table_name) {
-    if (!database) {
-        std::cerr << "DBHelper::drop -> " << "database is nullptr" << std::endl;
-        return {};
-    }
-
     try {
         std::string sql = "DROP TABLE IF EXISTS " + table_name;
         database->exec(sql);
@@ -200,11 +185,6 @@ std::string DBHelper::drop(const std::string &table_name) {
 }
 
 void DBHelper::write_to_cli(const std::string &table_name) {
-    if (!database) {
-        std::cerr << "DBHelper::write_to_cli -> " << "database is nullptr" << std::endl;
-        return;
-    }
-
     try {
         SQLite::Statement query(*database, "SELECT * FROM " + table_name);
         while (query.executeStep()) {

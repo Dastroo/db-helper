@@ -9,7 +9,7 @@
 
 template<typename T>
 bool DBHelper::exists(const std::string &table_name, const std::string &column, T value) {
-    SQLite::Column c = database->execAndGet(concatenate(
+    SQLite::Column c = database->execAndGet(mutl::concatenate(
             "SELECT EXISTS(SELECT 1 FROM ", table_name, " WHERE ", column, "=\"", value, "\" LIMIT 1)"));
     return c.getInt();
 }

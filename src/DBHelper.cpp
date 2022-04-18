@@ -5,14 +5,12 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
-#include <unistd.h>
 #include <filesystem>
 #include <my_utils/OSUtils.h>
 
 #include "../include/DBHelper.h"
 
 
-[[maybe_unused]]
 DBHelper::DBHelper() {
     this->db_full_path = get_default_dir_path("database.db3");
     set_db_dir_path(db_full_path);
@@ -26,7 +24,6 @@ DBHelper::DBHelper() {
     }
 }
 
-[[maybe_unused]]
 DBHelper::DBHelper(const std::string &db_path) {
     this->db_full_path = db_path;
     set_db_dir_path(db_path);
@@ -40,7 +37,6 @@ DBHelper::DBHelper(const std::string &db_path) {
     }
 }
 
-[[maybe_unused]]
 DBHelper::DBHelper(const int &permissions) {
     this->db_full_path = get_default_dir_path("database.db3");
     set_db_dir_path(db_full_path);
@@ -54,7 +50,6 @@ DBHelper::DBHelper(const int &permissions) {
     }
 }
 
-[[maybe_unused]]
 DBHelper::DBHelper(const std::string &db_path,
                    const int &permissions) {
     try {

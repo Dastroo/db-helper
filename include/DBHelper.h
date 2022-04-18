@@ -58,33 +58,26 @@ public:
      * <b>Windows:<b>\n\n
      * <b>not supported yet</b>\n
      */
-    [[maybe_unused]]
-    DBHelper();
+    explicit DBHelper();
 
-    [[maybe_unused]]
     explicit DBHelper(const std::string &db_path);
 
-    [[maybe_unused]]
     explicit DBHelper(const int &permissions);
 
     /**
      * TODO: write documentation
      */
-    [[maybe_unused]]
-    explicit DBHelper(const std::string &db_path,
+    DBHelper(const std::string &db_path,
                       const int &permissions);
 
     ~DBHelper();
 
     SQLite::Database &db() { return *database; }
 
-    [[maybe_unused]]
     inline std::string get_db_name() { return db_name; }
 
-    [[maybe_unused]]
     inline std::string get_db_dir_path() { return db_dir_path; }
 
-    [[maybe_unused]]
     inline std::string get_db_full_path() { return db_full_path; }
 
     /**
@@ -126,6 +119,8 @@ public:
      */
     std::string drop(const std::string &table_name);
 
+//======================================================================================================================
+
     /**
      * @brief Sqlite INSERT function
      * @sqlite
@@ -153,18 +148,40 @@ public:
      * INSERT INTO table_name (col1, col2) VALUES (1, 2);
      * \endcode
      */
+    template<typename ...Args>
+    inline std::string
+    insert(const std::string &table_name, std::initializer_list<std::string> columns, Args...values);
+
+    /**
+     * @brief Sqlite INSERT function
+     * @sqlite
+     * INSERT INTO <b>table_name</b> (<b>args...</b>) VALUES (<b>args...</b>);
+     * @example
+     * \code
+     * insert("table_name", "col1", "col2", 1, 2);
+     *  // TODO: write documentation
+     * result:
+     * INSERT INTO table_name (col1, col2) VALUES (1, 2);
+     * \endcode
+     */
     template<typename T>
-    std::string insert(const std::string &table_name, std::vector<std::string, T> columns_values);
+    inline std::string
+    insert(const std::string &table_name, const std::vector<std::pair<std::string, T>> &columns_values);
+
+//======================================================================================================================
+
+    template<typename Col, typename Op, typename Val>
+    inline std::string
+    dele(const std::string &table_name, const std::tuple<Col, Op, Val> &condition);
 
     /**
      * @brief sqlite DELETE function (cant name it delete for obvious reasons)
-     * @sqlite DELETE FROM <b>table_name</b> WHERE <b>column</b> <b>condition</b> <b>value</b>
+     * @sqlite DELETE FROM <b>table_name</b> WHERE <b>column</b> <b>op</b> <b>value</b>
      * @param s TODO: better documentation
      */
     template<typename T>
-    void
-    inline
-    dele(const std::string &table_name, const std::string &column, const std::string &condition, const T &value);
+    inline std::string
+    dele(const std::string &table_name, const std::string &column, const std::string &op, const T &value);
 
     /**
      * @brief sqlite DELETE function (cant name it delete for obvious reasons)
@@ -172,9 +189,14 @@ public:
      * @param s TODO: better documentation
      */
     template<typename T>
-    void
-    inline
+    inline std::string
     dele(const std::string &table_name, const std::string &column, const T &value);
+
+    template<typename Col, typename Op, typename Val>
+    inline std::string
+    dele(const std::string &table_name, std::vector<std::tuple<Col, Op, Val>> &conditions);
+
+//======================================================================================================================
 
     /**
      * @sqlite SELECT * FROM <b>table_name</b> WHERE <b>condition_column</b>=<b>condition_value</b>\n
@@ -184,25 +206,41 @@ public:
      *  int id = query->getColumn("id").getInt();
      *  char* val = query->getColumn("value").getString();
      * @endcode
-     *
      * @warning
      * may produce "database locked" error
      * make sure to only return this function to variable in local space like a function/method\n
      * TODO: better documentation
      */
     template<typename T>
-    [[maybe_unused]] std::shared_ptr<SQLite::Statement>
-    inline get(const std::string &table_name, const std::string &condition_column,
-               const T &condition_value);
+    inline SQLite::Column
+    get(const std::string &table_name, const std::string &condition_column, const T &condition_value);
 
     /**
      * @sqlite SELECT <b>column</b> FROM <b>table_name</b> WHERE <b>condition_column</b>=<b>condition_value</b>\n
      * TODO: better documentation
      */
     template<typename T>
-    [[maybe_unused]] SQLite::Column
-    inline get(const std::string &table_name, const std::string &column, const std::string &condition_column,
-               const T &condition_value);
+    inline SQLite::Column
+    get(const std::string &table_name, const std::string &column,
+        const std::string &condition_column, const T &condition_value);
+
+    /**
+     * @sqlite SELECT <b>column</b> FROM <b>table_name</b> WHERE <b>condition_column</b>=<b>condition_value</b>\n
+     * TODO: better documentation
+     */
+    template<typename Col, typename Op, typename Val>
+    inline SQLite::Column
+    get(const std::string &table_name, const std::string &column,
+        const std::tuple<Col, Op, Val> &condition);
+
+    /**
+     * @sqlite SELECT <b>column</b> FROM <b>table_name</b> WHERE <b>condition_column</b>=<b>condition_value</b>\n
+     * TODO: better documentation
+     */
+    template<typename Col, typename Op, typename Val>
+    inline SQLite::Column
+    get(const std::string &table_name, const std::string &column,
+        const std::vector<std::tuple<Col, Op, Val>> &conditions);
 
 //======================================================================================================================
 
@@ -321,15 +359,23 @@ public:
     *  TODO: better documentation
     */
     template<typename T, typename ...Args>
-    inline void update(const std::string &table_name, const std::string &condition_column, const T &condition_value,
-                       Args ...args);
+    inline std::string
+    update(const std::string &table_name, const std::string &condition_column, const T &condition_value, Args ...args);
+
+    /**
+    *  @sqlite UPDATE <b>table_name</b> SET (args...=args...)... WHERE <b>condition_column</b>='<b>condition_value</b>'
+    *  TODO: better documentation
+    */
+    template<typename Col, typename Op, typename Val, typename ...Args>
+    inline std::string
+    update(const std::string &table_name, const std::tuple<Col, Op, Val> &condition, Args ...args);
 
     /**
     *  @sqlite UPDATE <b>table_name</b> SET (args...=args...)... WHERE <b>condition_column</b>='<b>condition_value</b>'
     *  TODO: better documentation, broken arguments args seem useless
     */
     template<typename T, typename ...Args>
-    inline void
+    inline std::string
     update(const std::string &table_name, std::vector<std::tuple<std::string, std::string, T>> conditions,
            Args ...args);
 
@@ -337,7 +383,6 @@ public:
     void write_to_cli(const std::string &table_name);
 
 private:
-
     static std::string intersected_questionmarks(int num);
 
     std::string get_default_dir_path(const std::string &db_name);
@@ -365,10 +410,10 @@ private:
     void bind(SQLite::Statement &query, integer_pack<size_t, indexes...>, Args &&args);
 
     template<typename Col, typename Op, typename Val>
-    std::string parse_conditions(const std::vector<std::tuple<Col, Op, Val>> &conditions);
+    std::string format_into_question_mark_equation_logic(const std::vector<std::tuple<Col, Op, Val>> &conditions);
 
     template<typename Args, size_t... indexes>
-    std::string parse_columns_variadic(integer_pack<size_t, indexes...>, Args &&args);
+    std::string format_into_question_mark_equation_comma(integer_pack<size_t, indexes...>, Args &&args);
 };
 
 #undef private

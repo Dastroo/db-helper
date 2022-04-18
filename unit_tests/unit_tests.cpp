@@ -69,7 +69,7 @@ TEST_CASE(R"(database path)") {
 
 TEST_CASE(R"(sqlite statements construction)") {
     DBHelper db_helper;
-    SUBCASE(R"(db_helper.parse_conditions(std::vector<std::tuple<std::string, std::string, T>> &conditions))") {
+    SUBCASE(R"(db_helper.format_into_question_mark_equation_logic(std::vector<std::tuple<std::string, std::string, T>> &conditions))") {
         std::vector<std::tuple<std::string, std::string, void *>> conditions;
         conditions.emplace_back(std::tuple{"a", "=", nullptr});
         conditions.emplace_back(std::tuple{"b", ">=", nullptr});
@@ -82,9 +82,9 @@ TEST_CASE(R"(sqlite statements construction)") {
         conditions3.emplace_back(std::tuple{"b", ">=", "int()"});
         conditions3.emplace_back(std::tuple{"c", ">", "j"});
 
-        CHECK_EQ(db_helper.parse_conditions(conditions), "a=? AND b>=?");
-        CHECK_EQ(db_helper.parse_conditions(conditions2), "a=?");
-        CHECK_EQ(db_helper.parse_conditions(conditions3), "a=? AND b>=? AND c>?");
+        CHECK_EQ(db_helper.format_into_question_mark_equation_logic(conditions), "a=? AND b>=?");
+        CHECK_EQ(db_helper.format_into_question_mark_equation_logic(conditions2), "a=?");
+        CHECK_EQ(db_helper.format_into_question_mark_equation_logic(conditions3), "a=? AND b>=? AND c>?");
     }
 
     SUBCASE(R"(as_questionmark(const T &t))") {
@@ -105,12 +105,15 @@ TEST_CASE(R"(sqlite statements construction)") {
         typename integer_range_generate<std::size_t, 0, 4 - 2, 2>::type columns2;
         typename integer_range_generate<std::size_t, 0, 6 - 2, 2>::type columns3;
         typename integer_range_generate<std::size_t, 0, 8 - 2, 2>::type columns4;
-        CHECK_EQ(db_helper.parse_columns_variadic(columns, std::forward_as_tuple("a", "b")), "a=?");
-        CHECK_EQ(db_helper.parse_columns_variadic(columns2, std::forward_as_tuple("a", "b", "c", "d")), "a=?, c=?");
-        CHECK_EQ(db_helper.parse_columns_variadic(columns3, std::forward_as_tuple("a", "b", "c", "d", 'e', 1)),
+        CHECK_EQ(db_helper.format_into_question_mark_equation_comma(columns, std::forward_as_tuple("a", "b")), "a=?");
+        CHECK_EQ(db_helper.format_into_question_mark_equation_comma(columns2, std::forward_as_tuple("a", "b", "c", "d")), "a=?, c=?");
+        CHECK_EQ(db_helper.format_into_question_mark_equation_comma(columns3,
+                                                                    std::forward_as_tuple("a", "b", "c", "d", 'e', 1)),
                  "a=?, c=?, e=?");
-        CHECK_EQ(db_helper.parse_columns_variadic(columns4,
-                                                  std::forward_as_tuple(var, "b", const_var, "d", ref_var, 1, "ptr")),
+        CHECK_EQ(db_helper.format_into_question_mark_equation_comma(columns4,
+                                                                    std::forward_as_tuple(var, "b", const_var, "d",
+                                                                                          ref_var,
+                                                                                          1, "ptr")),
                  "default=?, const=?, default=?, ptr=?");
     }
 }
@@ -165,6 +168,33 @@ TEST_CASE("insert") {
         CHECK_EQ(db_helper.insert("test2", var, "val", 2, "b"), "INSERT INTO test2 (id, val) VALUES (?, ?)");
         CHECK_EQ(db_helper.insert("test2", var, "val", 3, 'c'), "INSERT INTO test2 (id, val) VALUES (?, ?)");
 
+    }
+
+    SUBCASE(R"(insert(const std::string &table_name, std::initializer_list<std::string> columns, Args...values))") {
+        //  ERROR
+//        CHECK_EQ(db_helper.insert("test"), "");
+//        CHECK_EQ(db_helper.insert("test", "id"), "");
+
+        //  NORMAL
+        std::string id = "id";
+        CHECK_EQ(db_helper.insert("test", {"id"}, "4"), "INSERT INTO test (id) VALUES (?)");
+        CHECK_EQ(db_helper.insert("test", {id}, 5), "INSERT INTO test (id) VALUES (?)");
+        CHECK_EQ(db_helper.insert("test2", {id, "val"}, 4, "a"), "INSERT INTO test2 (id, val) VALUES (?, ?)");
+        CHECK_EQ(db_helper.insert("test2", {"id", "val"}, 5, "b"), "INSERT INTO test2 (id, val) VALUES (?, ?)");
+        CHECK_EQ(db_helper.insert("test2", {id, "val"}, 6, 'c'), "INSERT INTO test2 (id, val) VALUES (?, ?)");
+
+    }
+
+    SUBCASE(R"(insert(const std::string &table_name, const std::vector<std::pair<std::string, T>> &columns_values))") {
+        std::vector<std::pair<std::string, std::string>> columns;
+        columns.emplace_back("id", "6");
+
+        std::vector<std::pair<std::string, std::string>> columns2;
+        columns2.emplace_back("id", "7");
+        columns2.emplace_back("val", "a");
+
+        CHECK_EQ(db_helper.insert("test", columns), "INSERT INTO test (id) VALUES (?)");
+        CHECK_EQ(db_helper.insert("test2", columns2), "INSERT INTO test2 (id, val) VALUES (?, ?)");
     }
 }
 
@@ -353,21 +383,65 @@ TEST_CASE("select") {
 
 TEST_CASE("update") {
     DBHelper db_helper;
-    SUBCASE(R"()") {
+    SUBCASE(R"(update(const std::string &table_name, const std::string &condition_column, const T &condition_value, Args ...args))") {
+        CHECK_EQ(db_helper.get("test2", "val", std::make_tuple("id", "=", 2)).getString(), "b");
+        CHECK_EQ(db_helper.update("test2", "id", 2, "val", "d"), "UPDATE test2 SET val=? WHERE id=?");
+        CHECK_EQ(db_helper.get("test2", "val", std::make_tuple("id", "=", 2)).getString(), "d");
+    }
 
+    SUBCASE(R"(update(const std::string &table_name, const std::tuple<Col, Op, Val> &condition, Args ...args))") {
+        CHECK_EQ(db_helper.get("test2", "val", std::make_tuple("id", "=", 2)).getString(), "d");
+        CHECK_EQ(db_helper.update("test2", std::make_tuple("id", "=", 2), "val", "b"), "UPDATE test2 SET val=? WHERE id=?");
+        CHECK_EQ(db_helper.get("test2", "val", std::make_tuple("id", "=", 2)).getString(), "b");
+    }
+
+    SUBCASE(R"(update(const std::string &table_name, std::vector<std::tuple<std::string, std::string, T>> conditions, Args ...args))") {
+        std::vector<std::tuple<std::string, std::string, int>> conditions;
+        conditions.emplace_back(std::tuple{"id", ">", 1});
+        conditions.emplace_back(std::tuple{"id", "<", 4});
+
+        auto query = db_helper.select("test2", {"val"}, conditions);
+        query->executeStep();
+        CHECK_EQ(query->getColumn(0).getString(), "b");
+        query->executeStep();
+        CHECK_EQ((char)query->getColumn(0).getInt(), 'c');
+
+        CHECK_EQ(db_helper.update("test2", conditions, "val", "d"), "UPDATE test2 SET val=? WHERE id>? AND id<?");
+
+        auto query2 = db_helper.select("test2", {"val"}, conditions);
+        query2->executeStep();
+        CHECK_EQ(query2->getColumn(0).getString(), "d");
+        query2->executeStep();
+        CHECK_EQ(query2->getColumn(0).getString(), "d");
     }
 }
 
 TEST_CASE("get") {
     DBHelper db_helper;
-    SUBCASE(R"()") {
+    SUBCASE(R"(get(const std::string &table_name, const std::string &condition_column, const T &condition_value))") {
+        CHECK_EQ(db_helper.get("test", "id", 1).getInt(), 1);
+    }
 
+    SUBCASE(R"(get(const std::string &table_name, const std::string &column, const std::string &condition_column, const T &condition_value))") {
+        CHECK_EQ(db_helper.get("test", "id", "id", 1).getInt(), 1);
+    }
+
+    SUBCASE(R"(get(const std::string &table_name, const std::string &column, const std::tuple<Col, Op, Val> &condition))") {
+        CHECK_EQ(db_helper.get("test", "id", std::make_tuple("id", "=", 1)).getInt(), 1);
+    }
+
+    SUBCASE(R"(get(const std::string &table_name, const std::string &column, const std::vector<std::tuple<Col, Op, Val>> &conditions))") {
+        std::vector<std::tuple<std::string, std::string, int>> conditions;
+        conditions.emplace_back(std::tuple{"id", ">", 1});
+        conditions.emplace_back(std::tuple{"id", "<", 3});
+
+        CHECK_EQ(db_helper.get("test", "id", conditions).getInt(), 2);
     }
 }
 
 TEST_CASE("delete") {
     DBHelper db_helper;
-    SUBCASE(R"()") {
+    SUBCASE(R"(dele(const std::string &table_name, const std::tuple<Col, Op, Val> &condition))") {
 
     }
 }

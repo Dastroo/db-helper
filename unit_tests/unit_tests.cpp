@@ -6,11 +6,9 @@
 
 #include <fstream>
 #include "doctest.h"
-//#define private public
+
+#define DBHELPER_TESTING_MODE
 #include "../include/DBHelper.h"
-//#undef private
-
-
 
 //  PUBLIC FUNCTIONS TESTS
 TEST_CASE("constructors") {

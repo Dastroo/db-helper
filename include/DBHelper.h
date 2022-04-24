@@ -14,12 +14,13 @@
 #include <my_utils/StringUtils.h>
 #include <my_utils/ArgumentUtils.h>
 
+#ifdef DBHELPER_TESTING_MODE
+#define private public
+#endif
 
 namespace SQLite {
     class Database;
 }
-
-#define private public
 
 //TODO: exception handling
 //TODO: add && in arg bundles
@@ -411,10 +412,11 @@ private:
     inline std::string as_questionmark(const T &t);
 
     template<typename Args, size_t... indexes>
-    void bind(SQLite::Statement &query, integer_pack<size_t, indexes...>, Args &&args);
+    inline void bind(SQLite::Statement &query, integer_pack<size_t, indexes...>, Args &&args);
 
     template<typename Col, typename Op, typename Val>
-    std::string format_into_question_mark_equation_logic(const std::vector<std::tuple<Col, Op, Val>> &conditions);
+    inline std::string
+    format_into_question_mark_equation_logic(const std::vector<std::tuple<Col, Op, Val>> &conditions);
 
     template<typename Args, size_t... indexes>
     std::string format_into_question_mark_equation_comma(integer_pack<size_t, indexes...>, Args &&args);

@@ -16,14 +16,11 @@ bool DBHelper::exists(const std::string &table_name, const std::string &column, 
 
 template<typename ...Args>
 inline std::string DBHelper::create(const std::string &table_name, Args &&...args) {
-    if (!database) {
-        std::cerr << "DBHelper::create -> " << "database is nullptr" << std::endl;
-        return {};
-    }
     if (sizeof...(args) == 0) {
         std::cerr << "DBHelper::create -> " << "invalid argument" << std::endl;
         return {};
     }
+
     try {
         std::string sql = "CREATE TABLE " + table_name + " (";
 
@@ -526,7 +523,8 @@ inline std::string DBHelper::as_questionmark(const T &t) {
 }
 
 template<typename Args, size_t... indexes>
-void DBHelper::bind(SQLite::Statement &query, integer_pack<size_t, indexes...>, Args &&args) {
+inline void
+DBHelper::bind(SQLite::Statement &query, integer_pack<size_t, indexes...>, Args &&args) {
     int n = 1;
     try {
         (query.bind(n++, std::get<indexes>(args)), ...);
@@ -536,7 +534,7 @@ void DBHelper::bind(SQLite::Statement &query, integer_pack<size_t, indexes...>, 
 }
 
 template<typename Col, typename Op, typename Val>
-std::string
+inline std::string
 DBHelper::format_into_question_mark_equation_logic(const std::vector<std::tuple<Col, Op, Val>> &conditions) {
     if (conditions.empty())
         return {};

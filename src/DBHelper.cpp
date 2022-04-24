@@ -12,7 +12,7 @@
 
 
 DBHelper::DBHelper() {
-    this->db_full_path = default_path.empty() ? get_default_dir_path("database.db3") : default_path;
+    this->db_full_path = DBHelper::default_path.empty() ? get_default_dir_path("database.db3") : DBHelper::default_path;
     set_db_dir_path(db_full_path);
     set_db_name(db_full_path);
     create_db_dir();
@@ -38,7 +38,7 @@ DBHelper::DBHelper(const std::string &db_path) {
 }
 
 DBHelper::DBHelper(const int &permissions) {
-    this->db_full_path = get_default_dir_path("database.db3");
+    this->db_full_path = default_path.empty() ? get_default_dir_path("database.db3") : default_path;
     set_db_dir_path(db_full_path);
     set_db_name(db_full_path);
     create_db_dir();
@@ -70,17 +70,17 @@ void DBHelper::set_db_dir_path(std::string full_path) {
 }
 
 std::string DBHelper::get_default_dir_path(const std::string &db_name) {
-    if (is_linux()) {
-        if (is_elevated())
+    if (mutl::is_linux()) {
+        if (mutl::is_elevated())
             //TODO: change /usr to /var because /usr is for readonly files and db is readwrite
             return mutl::concatenate("/var/", mutl::to_lower(program_invocation_short_name), '/', db_name);
         else
-            return mutl::concatenate(get_home_path(), "/.local", "/share/",
+            return mutl::concatenate(mutl::get_home_path(), "/.local", "/share/",
                                      mutl::to_lower(program_invocation_short_name), '/',
                                      db_name);
-    } else if (is_windows()) {
+    } else if (mutl::is_windows()) {
         //  TODO: windows support
-        return mutl::concatenate(get_home_path(), "needswinsupport");
+        return mutl::concatenate(mutl::get_home_path(), "needswinsupport");
     } else
         throw std::invalid_argument("unsupported operating system");
 }
